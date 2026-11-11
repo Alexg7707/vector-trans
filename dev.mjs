@@ -1,7 +1,8 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import handler from './api/request.js';
-const files={'/':'index.html','/style.css':'style.css','/app.js':'app.js'};
+const files={'/':'index.html','/style.css':'style.css','/app.js':'app.js','/cargo-clean.jpg':'cargo-clean.jpg','/truck-clean.jpg':'truck-clean.jpg'};
+const contentTypes={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.jpg':'image/jpeg'};
 http.createServer(async(req,res)=>{
   if(req.url === '/api/request') {
     let body='';
@@ -13,7 +14,7 @@ http.createServer(async(req,res)=>{
   }
   const file=files[req.url?.split('?')[0]];
   if(!file){res.writeHead(404);res.end('Not found');return;}
-  res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html; charset=utf-8');
+  res.setHeader('Content-Type',contentTypes[file.slice(file.lastIndexOf('.'))]);
   res.end(await readFile(new URL('./'+file,import.meta.url)));
 }).listen(3000,'127.0.0.1',()=>console.log('Local preview: http://127.0.0.1:3000'));
 
