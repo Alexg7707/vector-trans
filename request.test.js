@@ -25,3 +25,32 @@ test('endpoint only acknowledges a successful Telegram response',async()=>{
   }finally{globalThis.fetch=originalFetch;delete process.env.TELEGRAM_BOT_TOKEN;delete process.env.TELEGRAM_CHAT_ID;}
 });
 
+test('a Telegram rate limit returns a retry hint without resending the request', async t => {
+  t.mock.method(globalThis, 'fetch');
+  const originalToken = process.env.TELEGRAM_BOT_TOKEN;
+  const originalChat = process.env.TELEGRAM_CHAT_ID;
+  t.after(() => {
+    if (originalToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+    else process.env.TELEGRAM_BOT_TOKEN = originalToken;
+    if (originalChat === undefined) delete process.env.TELEGRAM_CHAT_ID;
+    else process.env.TELEGRAM_CHAT_ID = originalChat;
+  });
+  process.env.TELEGRAM_BOT_TOKEN = 'test-token';
+  process.env.TELEGRAM_CHAT_ID = 'test-chat';
+
+  for (const [reply, expectedDelay] of [
+    [JSON.stringify({ok: false, parameters: {retry_after: 12}}), '12'],
+    [JSON.stringify({ok: false, parameters: {retry_after: -1}}), undefined],
+    ['temporarily rate limited', undefined],
+  ]) {
+    fetch.mock.mockImplementation(async () => new Response(reply, {status: 429}));
+    const callsBefore = fetch.mock.callCount();
+    const res = response();
+    await handler(request(sample), res);
+    assert.equal(fetch.mock.callCount(), callsBefore + 1);
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.headers['Retry-After'], expectedDelay);
+    assert.match(res.body.error, expectedDelay ? /12 сек/ : /позже/);
+    assert.equal(res.body.ok, undefined);
+  }
+});
