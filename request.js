@@ -37,6 +37,16 @@ export default async function handler(req,res) {
   const id = randomUUID().slice(0,8).toUpperCase();
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text:message(data,id)}),signal:AbortSignal.timeout(12000)});
+    if (response.status === 429) {
+      const result = await response.json().catch(() => null);
+      const retryAfter = result?.parameters?.retry_after;
+      let error = 'Сервис перегружен. Попробуйте отправить заявку позже.';
+      if (Number.isSafeInteger(retryAfter) && retryAfter > 0) {
+        res.setHeader('Retry-After', String(retryAfter));
+        error = `Сервис перегружен. Попробуйте отправить заявку через ${retryAfter} сек.`;
+      }
+      return res.status(503).json({error});
+    }
     const result = await response.json();
     if(!response.ok || !result.ok) return res.status(502).json({error:'Telegram не подтвердил доставку. Попробуйте позже.'});
     return res.status(200).json({ok:true,id});
